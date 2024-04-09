@@ -65,6 +65,18 @@ namespace nlohmann
 // Grid that contains the entities
 static std::vector<std::vector<entity_t>> entity_grid;
 
+void simul_plant(int i, int j) {
+    
+}
+
+void simul_herbivore(int i, int j) {
+    
+}
+
+void simul_carnivore(int i, int j) {
+    
+}
+
 int main()
 {
     crow::SimpleApp app;
@@ -97,7 +109,55 @@ int main()
         entity_grid.assign(NUM_ROWS, std::vector<entity_t>(NUM_ROWS, { empty, 0, 0}));
         
         // Create the entities
-        // <YOUR CODE HERE>
+        for(int i = 0; i < (uint32_t)request_body["plants"]; i++) {
+            static std::random_device rd; // Inicializa a random_device para obter sementes aleatórias
+            static std::mt19937 gen(rd()); // Usa a random_device para inicializar um gerador de números pseudoaleatórios
+            std::uniform_int_distribution<> dis(0, 14); //Gera um número aleatório no intervalo definido
+            int rand_row = dis(gen);
+            int rand_col = dis(gen);
+
+            while(entity_grid[rand_row][rand_col].type != empty){
+                rand_row = dis(gen);
+                rand_col = dis(gen);
+            }
+            
+            entity_grid[rand_row][rand_col].type = plant;
+            entity_grid[rand_row][rand_col].age = 0; 
+        }
+
+        for(int i = 0; i < (uint32_t)request_body["herbivores"]; i++) {
+            static std::random_device rd; 
+            static std::mt19937 gen(rd()); 
+            std::uniform_int_distribution<> dis(0, 14); 
+            int rand_row = dis(gen);
+            int rand_col = dis(gen);
+
+            while(entity_grid[rand_row][rand_col].type != empty){
+                rand_row = dis(gen);
+                rand_col = dis(gen);
+            }
+            
+            entity_grid[rand_row][rand_col].type = herbivore;
+            entity_grid[rand_row][rand_col].age = 0; 
+            entity_grid[rand_row][rand_col].energy = 100; 
+        }
+
+        for(int i = 0; i < (uint32_t)request_body["carnivores"]; i++) {
+            static std::random_device rd; 
+            static std::mt19937 gen(rd()); 
+            std::uniform_int_distribution<> dis(0, 14); 
+            int rand_row = dis(gen);
+            int rand_col = dis(gen);
+
+            while(entity_grid[rand_row][rand_col].type != empty){
+                rand_row = dis(gen);
+                rand_col = dis(gen);
+            }
+            
+            entity_grid[rand_row][rand_col].type = carnivore;
+            entity_grid[rand_row][rand_col].age = 0; 
+            entity_grid[rand_row][rand_col].energy = 100; 
+        }
 
         // Return the JSON representation of the entity grid
         nlohmann::json json_grid = entity_grid; 
@@ -110,9 +170,22 @@ int main()
                                {
         // Simulate the next iteration
         // Iterate over the entity grid and simulate the behaviour of each entity
-        
-        // <YOUR CODE HERE>
-        
+        for (int i=0; i<NUM_ROWS; i++) {
+            for (int j=0; j<NUM_ROWS; j++) {
+                if (entity_grid[i][j].type == plant) {
+                    std::thread t_plant(simul_plant, i, j);
+                    t_plant.detach();
+                }
+                else if (entity_grid[i][j].type == herbivore) {          
+                    std::thread t_herbivore(simul_herbivore, i, j);
+                    t_herbivore.detach();
+                }
+                else if (entity_grid[i][j].type == carnivore) {
+                    std::thread t_carnivore(simul_carnivore, i, j);
+                    t_carnivore.detach();
+                }                    
+            }
+        }
         // Return the JSON representation of the entity grid
         nlohmann::json json_grid = entity_grid; 
         return json_grid.dump(); });
