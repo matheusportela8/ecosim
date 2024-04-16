@@ -38,6 +38,10 @@ struct pos_t
 {
     uint32_t i;
     uint32_t j;
+    // Sobrecarga do operador de igualdade
+    bool operator==(const pos_t& other) const {
+        return i == other.i && j == other.j;
+    }
 };
 
 struct entity_t
@@ -45,7 +49,8 @@ struct entity_t
     entity_type_t type;
     int32_t energy;
     int32_t age;
-    std::mutex *mut;
+    bool already_atualized;
+    std::mutex *mtx;
 };
 
 // Auxiliary code to convert the entity_type_t enum to a string
@@ -77,34 +82,50 @@ bool random_action(float probability) {
 
 void simul_plant(int i, int j) {
 
+    entity_grid[i][j].mtx->lock();  // Trava o mutex da posição atual
+
+    // Trava os mutexes das posições adjacentes
+    if (i + 1 < NUM_ROWS) entity_grid[i + 1][j].mtx->lock();
+    if (i > 0) entity_grid[i - 1][j].mtx->lock();
+    if (j + 1 < NUM_ROWS) entity_grid[i][j + 1].mtx->lock();
+    if (j > 0) entity_grid[i][j - 1].mtx->lock();
+
     std::vector<pos_t> growth_positions_available;
 
-    if(i+1 < 15 && entity_grid[i+1][j].type == empty) {
-        pos_t position_available;
-        position_available.i = i+1;
-        position_available.j = j;
-        growth_positions_available.push_back(position_available);
+    if(i+1 < NUM_ROWS) {
+        if(entity_grid[i+1][j].type == empty) {
+            pos_t position_available;
+            position_available.i = i+1;
+            position_available.j = j;
+            growth_positions_available.push_back(position_available);
+        }
     }
 
-    if(i-1 >= 0 && entity_grid[i-1][j].type == empty) {
-        pos_t position_available;
-        position_available.i = i-1;
-        position_available.j = j;
-        growth_positions_available.push_back(position_available);
+    if(i > 0) {
+        if(entity_grid[i-1][j].type == empty) {
+            pos_t position_available;
+            position_available.i = i-1;
+            position_available.j = j;
+            growth_positions_available.push_back(position_available);
+        }
     }
 
-    if(j+1 < 15 && entity_grid[i][j+1].type == empty) {
-        pos_t position_available;
-        position_available.i = i;
-        position_available.j = j+1;
-        growth_positions_available.push_back(position_available);
+    if(j+1 < NUM_ROWS) {
+        if(entity_grid[i][j+1].type == empty){
+            pos_t position_available;
+            position_available.i = i;
+            position_available.j = j+1;
+            growth_positions_available.push_back(position_available);
+        }
     }
 
-    if(j-1 >= 0 && entity_grid[i][j+1].type == empty) {
-        pos_t position_available;
-        position_available.i = i;
-        position_available.j = j-1;
-        growth_positions_available.push_back(position_available);
+    if(j > 0) {
+        if(entity_grid[i][j-1].type == empty) {
+            pos_t position_available;
+            position_available.i = i;
+            position_available.j = j-1;
+            growth_positions_available.push_back(position_available);
+        }
     }
 
     if (!growth_positions_available.empty()) {
@@ -118,20 +139,188 @@ void simul_plant(int i, int j) {
             entity_grid[sorted_position.i][sorted_position.j].type = plant;
             entity_grid[sorted_position.i][sorted_position.j].energy = 0;
             entity_grid[sorted_position.i][sorted_position.j].age = 0;
+            entity_grid[sorted_position.i][sorted_position.j].already_atualized = true;
         }
     }
 
-    entity_grid[i][j].age += 1;  //increase current plant age
+    entity_grid[i][j].age += 1;  // aumenta a idade da planta em 1
 
-    if (entity_grid[i][j].age == PLANT_MAXIMUM_AGE) {  // verify if the plant achieved the death age
+    if (entity_grid[i][j].age == PLANT_MAXIMUM_AGE) {  // verifica se a planta atingiu a idade maxima e se sim a planta morre
         entity_grid[i][j].type = empty;
         entity_grid[i][j].energy = 0;
         entity_grid[i][j].age = 0;
     }
+
+    // Libera os mutexes das posições adjacentes
+    if (i + 1 < NUM_ROWS) entity_grid[i + 1][j].mtx->unlock();
+    if (i > 0) entity_grid[i - 1][j].mtx->unlock();
+    if (j + 1 < NUM_ROWS) entity_grid[i][j + 1].mtx->unlock();
+    if (j > 0) entity_grid[i][j - 1].mtx->unlock();
+
+    entity_grid[i][j].mtx->unlock();  // Libera o mutex da posição atual
 }
 
 void simul_herbivore(int i, int j) {
-    
+    entity_grid[i][j].mtx->lock();  // Trava o mutex da posição atual
+
+    // Trava os mutexes das posições adjacentes
+    if (i + 1 < NUM_ROWS) entity_grid[i + 1][j].mtx->lock();
+    if (i > 0) entity_grid[i - 1][j].mtx->lock();
+    if (j + 1 < NUM_ROWS) entity_grid[i][j + 1].mtx->lock();
+    if (j > 0) entity_grid[i][j - 1].mtx->lock();
+
+    std::vector<pos_t> neighboring_empty_positions; // vetor das posicoes vazias adjacentes
+    std::vector<pos_t> neighboring_plants_positions; // vetor das posicoes com planta adjacentes
+
+    if(i+1 < NUM_ROWS) {
+        if(entity_grid[i+1][j].type == empty) {
+            pos_t position_available;
+            position_available.i = i+1;
+            position_available.j = j;
+            neighboring_empty_positions.push_back(position_available);
+        }
+        if(entity_grid[i+1][j].type == plant) {
+            pos_t position_available;
+            position_available.i = i+1;
+            position_available.j = j;
+            neighboring_plants_positions.push_back(position_available);
+        }
+    }
+
+    if(i > 0) {
+        if(entity_grid[i-1][j].type == empty) {
+            pos_t position_available;
+            position_available.i = i-1;
+            position_available.j = j;
+            neighboring_empty_positions.push_back(position_available);
+        }
+        if(entity_grid[i-1][j].type == plant) {
+            pos_t position_available;
+            position_available.i = i-1;
+            position_available.j = j;
+            neighboring_plants_positions.push_back(position_available);
+        }
+    }
+
+    if(j+1 < NUM_ROWS) {
+        if(entity_grid[i][j+1].type == empty){
+            pos_t position_available;
+            position_available.i = i;
+            position_available.j = j+1;
+            neighboring_empty_positions.push_back(position_available);
+        }
+        if(entity_grid[i][j+1].type == plant){
+            pos_t position_available;
+            position_available.i = i;
+            position_available.j = j+1;
+            neighboring_plants_positions.push_back(position_available);
+        }
+    }
+
+    if(j > 0) {
+        if(entity_grid[i][j-1].type == empty) {
+            pos_t position_available;
+            position_available.i = i;
+            position_available.j = j-1;
+            neighboring_empty_positions.push_back(position_available);
+        }if(entity_grid[i][j-1].type == plant) {
+            pos_t position_available;
+            position_available.i = i;
+            position_available.j = j-1;
+            neighboring_plants_positions.push_back(position_available);
+        }
+    }
+
+    // tentativa de comer uma planta
+    if (!neighboring_plants_positions.empty()) {
+        bool try_to_eat = random_action(HERBIVORE_EAT_PROBABILITY);
+        if(try_to_eat == true) {
+            std::random_device rd;  
+            std::mt19937 gen(rd());  
+            std::uniform_int_distribution<> dis(0, neighboring_plants_positions.size() - 1);
+            pos_t eat_position = neighboring_plants_positions[dis(gen)];
+        
+            entity_grid[eat_position.i][eat_position.j].type = empty;
+            entity_grid[eat_position.i][eat_position.j].energy = 0;
+            entity_grid[eat_position.i][eat_position.j].age = 0;
+            entity_grid[eat_position.i][eat_position.j].already_atualized = true;
+
+            entity_grid[i][j].energy = entity_grid[i][j].energy + 30;
+            neighboring_empty_positions.push_back(eat_position);
+        }
+    }
+
+    // tentativa de se reproduzir
+    if (!neighboring_empty_positions.empty()) {
+        if(entity_grid[i][j].energy > THRESHOLD_ENERGY_FOR_REPRODUCTION) {
+            bool try_to_reproduce = random_action(HERBIVORE_REPRODUCTION_PROBABILITY);
+            if(try_to_reproduce == true) {
+                std::random_device rd;  
+                std::mt19937 gen(rd());  
+                std::uniform_int_distribution<> dis(0, neighboring_empty_positions.size() - 1);
+                pos_t child_position = neighboring_empty_positions[dis(gen)];
+            
+                entity_grid[child_position.i][child_position.j].type = herbivore;
+                entity_grid[child_position.i][child_position.j].energy = 100;
+                entity_grid[child_position.i][child_position.j].age = 0;
+                entity_grid[child_position.i][child_position.j].already_atualized = true;
+
+                entity_grid[i][j].energy = entity_grid[i][j].energy - 10;
+                for (auto it = neighboring_empty_positions.begin(); it != neighboring_empty_positions.end(); ++it) {
+                        if (*it == child_position) {
+                        neighboring_empty_positions.erase(it);
+                        break;  
+                    }
+                }
+            }
+        }
+    }
+
+    bool age_increased = false;
+
+    // tentativa de se movimentar
+    if (!neighboring_empty_positions.empty()) {
+        bool try_to_move = random_action(HERBIVORE_MOVE_PROBABILITY);
+        if(try_to_move == true) {
+            std::random_device rd;  
+            std::mt19937 gen(rd());  
+            std::uniform_int_distribution<> dis(0, neighboring_plants_positions.size() - 1);
+            pos_t move_position = neighboring_plants_positions[dis(gen)];
+        
+            entity_grid[move_position.i][move_position.j].type = herbivore;
+            entity_grid[move_position.i][move_position.j].energy = entity_grid[i][j].energy - 5;
+            entity_grid[move_position.i][move_position.j].age = entity_grid[i][j].age + 1;
+            entity_grid[move_position.i][move_position.j].already_atualized = true;
+            age_increased = true;
+
+            entity_grid[i][j].type = empty;
+            entity_grid[i][j].energy = 0;
+            entity_grid[i][j].age = 0;
+            
+            if (entity_grid[move_position.i][move_position.j].age == HERBIVORE_MAXIMUM_AGE || entity_grid[move_position.i][move_position.j].energy == 0) { 
+                entity_grid[move_position.i][move_position.j].type = empty;
+                entity_grid[move_position.i][move_position.j].energy = 0;
+                entity_grid[move_position.i][move_position.j].age = 0;
+            }
+        }
+    }
+    if(age_increased == false) {
+        entity_grid[i][j].age += 1;
+    }
+
+    if (entity_grid[i][j].age == HERBIVORE_MAXIMUM_AGE || entity_grid[i][j].energy == 0) { 
+        entity_grid[i][j].type = empty;
+        entity_grid[i][j].energy = 0;
+        entity_grid[i][j].age = 0;
+    }
+
+    // Libera os mutexes das posições adjacentes
+    if (i + 1 < NUM_ROWS) entity_grid[i + 1][j].mtx->unlock();
+    if (i > 0) entity_grid[i - 1][j].mtx->unlock();
+    if (j + 1 < NUM_ROWS) entity_grid[i][j + 1].mtx->unlock();
+    if (j > 0) entity_grid[i][j - 1].mtx->unlock();
+
+    entity_grid[i][j].mtx->unlock();  // Libera o mutex da posição atual
 }
 
 void simul_carnivore(int i, int j) {
@@ -167,7 +356,12 @@ int main()
 
         // Clear the entity grid
         entity_grid.clear();
-        entity_grid.assign(NUM_ROWS, std::vector<entity_t>(NUM_ROWS, { empty, 0, 0}));
+        entity_grid.assign(NUM_ROWS, std::vector<entity_t>(NUM_ROWS, { empty, 0, 0, false, new std::mutex()}));
+        for(int i = 0; i < NUM_ROWS; i++){
+            for(int j = 0; j < NUM_ROWS; j++){
+                entity_grid[i][j].mtx = new std::mutex();
+            }
+        }
         
         // Create the entities
         for(int i = 0; i < (uint32_t)request_body["plants"]; i++) {
@@ -231,20 +425,28 @@ int main()
                                {
         // Simulate the next iteration
         // Iterate over the entity grid and simulate the behaviour of each entity
+        for (int i=0; i<15; i++) {
+            for (int j=0; j<15; j++) {
+                entity_grid[i][j].already_atualized = false;
+            }
+        }
+
         for (int i=0; i<NUM_ROWS; i++) {
             for (int j=0; j<NUM_ROWS; j++) {
-                if (entity_grid[i][j].type == plant) {
-                    std::thread t_plant(simul_plant, i, j);
-                    t_plant.detach();
-                }
-                else if (entity_grid[i][j].type == herbivore) {          
-                    std::thread t_herbivore(simul_herbivore, i, j);
-                    t_herbivore.detach();
-                }
-                else if (entity_grid[i][j].type == carnivore) {
-                    std::thread t_carnivore(simul_carnivore, i, j);
-                    t_carnivore.detach();
-                }                    
+                if (entity_grid[i][j].already_atualized == false) {
+                    if (entity_grid[i][j].type == plant) {
+                        std::thread t_plant(simul_plant, i, j);
+                        t_plant.detach();
+                    }
+                    else if (entity_grid[i][j].type == herbivore) {          
+                        std::thread t_herbivore(simul_herbivore, i, j);
+                        t_herbivore.detach();
+                    }
+                    else if (entity_grid[i][j].type == carnivore) {
+                        std::thread t_carnivore(simul_carnivore, i, j);
+                        t_carnivore.detach();
+                    }  
+                }                  
             }
         }
         // Return the JSON representation of the entity grid
