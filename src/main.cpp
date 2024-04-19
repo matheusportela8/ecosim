@@ -50,9 +50,8 @@ struct entity_t
     int32_t energy;
     int32_t age;
     bool already_atualized;
-    std::mutex *mtx;
 };
-
+std::mutex mtx;
 // Auxiliary code to convert the entity_type_t enum to a string
 NLOHMANN_JSON_SERIALIZE_ENUM(entity_type_t, {
                                                 {empty, " "},
@@ -80,17 +79,17 @@ bool random_action(float probability) {
     return dis(gen) < probability;
 }
 
+std::mutex cv_mutex;
+std::condition_variable cv;
+
 void simul_plant(int i, int j) {
 
-    entity_grid[i][j].mtx->lock();  // Trava o mutex da posição atual
-
-    // Trava os mutexes das posições adjacentes
-    if (i + 1 < NUM_ROWS) entity_grid[i + 1][j].mtx->lock();
-    if (i > 0) entity_grid[i - 1][j].mtx->lock();
-    if (j + 1 < NUM_ROWS) entity_grid[i][j + 1].mtx->lock();
-    if (j > 0) entity_grid[i][j - 1].mtx->lock();
+    std::unique_lock<std::mutex> lock(cv_mutex);
+    printf("parou no wait planta\n");
+    cv.wait(lock);
 
     std::vector<pos_t> growth_positions_available;
+    printf("saiu no wait planta\n");
 
     if(i+1 < NUM_ROWS) {
         if(entity_grid[i+1][j].type == empty) {
@@ -152,23 +151,16 @@ void simul_plant(int i, int j) {
     }
 
     // Libera os mutexes das posições adjacentes
-    if (i + 1 < NUM_ROWS) entity_grid[i + 1][j].mtx->unlock();
-    if (i > 0) entity_grid[i - 1][j].mtx->unlock();
-    if (j + 1 < NUM_ROWS) entity_grid[i][j + 1].mtx->unlock();
-    if (j > 0) entity_grid[i][j - 1].mtx->unlock();
+    printf("terminou planta planta\n");
 
-    entity_grid[i][j].mtx->unlock();  // Libera o mutex da posição atual
+
 }
 
 void simul_herbivore(int i, int j) {
-    entity_grid[i][j].mtx->lock();  // Trava o mutex da posição atual
-
-    // Trava os mutexes das posições adjacentes
-    if (i + 1 < NUM_ROWS) entity_grid[i + 1][j].mtx->lock();
-    if (i > 0) entity_grid[i - 1][j].mtx->lock();
-    if (j + 1 < NUM_ROWS) entity_grid[i][j + 1].mtx->lock();
-    if (j > 0) entity_grid[i][j - 1].mtx->lock();
-
+    std::unique_lock<std::mutex> lock(cv_mutex);
+    printf("parou no wait herbivoro\n");
+    cv.wait(lock);
+    printf("saiu no wait herbivoro\n");
     std::vector<pos_t> neighboring_empty_positions; // vetor das posicoes vazias adjacentes
     std::vector<pos_t> neighboring_plants_positions; // vetor das posicoes com planta adjacentes
 
@@ -313,24 +305,14 @@ void simul_herbivore(int i, int j) {
         entity_grid[i][j].energy = 0;
         entity_grid[i][j].age = 0;
     }
-
-    // Libera os mutexes das posições adjacentes
-    if (i + 1 < NUM_ROWS) entity_grid[i + 1][j].mtx->unlock();
-    if (i > 0) entity_grid[i - 1][j].mtx->unlock();
-    if (j + 1 < NUM_ROWS) entity_grid[i][j + 1].mtx->unlock();
-    if (j > 0) entity_grid[i][j - 1].mtx->unlock();
-
-    entity_grid[i][j].mtx->unlock();  // Libera o mutex da posição atual
+    printf("terminou herbivoro\n");
 }
 
 void simul_carnivore(int i, int j) {
-    entity_grid[i][j].mtx->lock();  // Trava o mutex da posição atual
-
-    // Trava os mutexes das posições adjacentes
-    if (i + 1 < NUM_ROWS) entity_grid[i + 1][j].mtx->lock();
-    if (i > 0) entity_grid[i - 1][j].mtx->lock();
-    if (j + 1 < NUM_ROWS) entity_grid[i][j + 1].mtx->lock();
-    if (j > 0) entity_grid[i][j - 1].mtx->lock();
+    std::unique_lock<std::mutex> lock(cv_mutex);
+    printf("parou wait carnivoro\n");
+    cv.wait(lock);
+    printf("saiu do wait carnivoro\n");
 
     std::vector<pos_t> neighboring_empty_positions; // vetor das posicoes vazias adjacentes
     std::vector<pos_t> neighboring_herbivore_positions; // vetor das posicoes com herbivoros adjacentes
@@ -478,12 +460,7 @@ void simul_carnivore(int i, int j) {
     }
 
     // Libera os mutexes das posições adjacentes
-    if (i + 1 < NUM_ROWS) entity_grid[i + 1][j].mtx->unlock();
-    if (i > 0) entity_grid[i - 1][j].mtx->unlock();
-    if (j + 1 < NUM_ROWS) entity_grid[i][j + 1].mtx->unlock();
-    if (j > 0) entity_grid[i][j - 1].mtx->unlock();
-
-    entity_grid[i][j].mtx->unlock();  // Libera o mutex da posição atual
+    printf("terminou carnivoro\n");
 }
 
 int main()
@@ -515,12 +492,7 @@ int main()
 
         // Clear the entity grid
         entity_grid.clear();
-        entity_grid.assign(NUM_ROWS, std::vector<entity_t>(NUM_ROWS, { empty, 0, 0, false, new std::mutex()}));
-        for(int i = 0; i < NUM_ROWS; i++){
-            for(int j = 0; j < NUM_ROWS; j++){
-                entity_grid[i][j].mtx = new std::mutex();
-            }
-        }
+        entity_grid.assign(NUM_ROWS, std::vector<entity_t>(NUM_ROWS, { empty, 0, 0, false}));
         
         // Create the entities
         for(int i = 0; i < (uint32_t)request_body["plants"]; i++) {
@@ -590,24 +562,44 @@ int main()
             }
         }
 
-        for (int i=0; i<NUM_ROWS; i++) {
-            for (int j=0; j<NUM_ROWS; j++) {
-                if (entity_grid[i][j].already_atualized == false) {
+        std::vector<std::thread> threads;
+        for (int i = 0; i < NUM_ROWS; i++) {
+            for (int j = 0; j < NUM_ROWS; j++) {
+                if (!entity_grid[i][j].already_atualized) {
                     if (entity_grid[i][j].type == plant) {
-                        std::thread t_plant(simul_plant, i, j);
-                        t_plant.join();
+                        threads.emplace_back(simul_plant, i, j);
+                        printf("criou a thread da planta\n");
                     }
-                    else if (entity_grid[i][j].type == herbivore) {          
-                        std::thread t_herbivore(simul_herbivore, i, j);
-                        t_herbivore.join();
+                    else if (entity_grid[i][j].type == herbivore) {
+                        threads.emplace_back(simul_herbivore, i, j);
+                        printf("criou a thread do herbivoro\n");
                     }
                     else if (entity_grid[i][j].type == carnivore) {
-                        std::thread t_carnivore(simul_carnivore, i, j);
-                        t_carnivore.join();
-                    }  
-                }                  
+                        threads.emplace_back(simul_carnivore, i, j);
+                        printf("criou a thread do carnivoro\n");
+                    }
+                }
             }
         }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        int i=0;
+        printf("acordou todas\n");        
+        cv.notify_all();
+        
+        for (auto& thread : threads) {
+        printf("join thread %d\n", i);
+        thread.join();
+        i++;
+        }      
+        
+
+
+
+
+
+
+
         // Return the JSON representation of the entity grid
         nlohmann::json json_grid = entity_grid; 
         return json_grid.dump(); });
