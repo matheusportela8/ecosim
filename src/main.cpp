@@ -237,7 +237,14 @@ void simul_herbivore(int i, int j) {
             entity_grid[eat_position.i][eat_position.j].age = 0;
             entity_grid[eat_position.i][eat_position.j].already_atualized = true;
 
-            entity_grid[i][j].energy = entity_grid[i][j].energy + 30;
+            if (entity_grid[i][j].energy + 30 >= MAXIMUM_ENERGY)
+            {
+                entity_grid[i][j].energy = MAXIMUM_ENERGY;
+            }
+            else
+            {
+                entity_grid[i][j].energy = entity_grid[i][j].energy + 30;
+            }
             neighboring_empty_positions.push_back(eat_position);
         }
     }
@@ -389,8 +396,14 @@ void simul_carnivore(int i, int j) {
             entity_grid[eat_position.i][eat_position.j].energy = 0;
             entity_grid[eat_position.i][eat_position.j].age = 0;
             entity_grid[eat_position.i][eat_position.j].already_atualized = true;
-
-            entity_grid[i][j].energy = entity_grid[i][j].energy + 20;
+            if (entity_grid[i][j].energy + 20 >= MAXIMUM_ENERGY)
+            {
+                entity_grid[i][j].energy = MAXIMUM_ENERGY;
+            }
+            else
+            {
+                entity_grid[i][j].energy = entity_grid[i][j].energy + 20;
+            }
             neighboring_empty_positions.push_back(eat_position);
         }
     }
