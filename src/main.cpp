@@ -296,7 +296,7 @@ void simul_herbivore(int i, int j) {
             entity_grid[i][j].energy = 0;
             entity_grid[i][j].age = 0;
             
-            if (entity_grid[move_position.i][move_position.j].age == HERBIVORE_MAXIMUM_AGE || entity_grid[move_position.i][move_position.j].energy == 0) { 
+            if (entity_grid[move_position.i][move_position.j].age == HERBIVORE_MAXIMUM_AGE || entity_grid[move_position.i][move_position.j].energy <= 0) { 
                 entity_grid[move_position.i][move_position.j].type = empty;
                 entity_grid[move_position.i][move_position.j].energy = 0;
                 entity_grid[move_position.i][move_position.j].age = 0;
@@ -307,7 +307,7 @@ void simul_herbivore(int i, int j) {
         entity_grid[i][j].age += 1;
     }
 
-    if (entity_grid[i][j].age == HERBIVORE_MAXIMUM_AGE || entity_grid[i][j].energy == 0) { 
+    if (entity_grid[i][j].age == HERBIVORE_MAXIMUM_AGE || entity_grid[i][j].energy <= 0) { 
         entity_grid[i][j].type = empty;
         entity_grid[i][j].energy = 0;
         entity_grid[i][j].age = 0;
@@ -455,7 +455,7 @@ void simul_carnivore(int i, int j) {
             entity_grid[i][j].energy = 0;
             entity_grid[i][j].age = 0;
             
-            if (entity_grid[move_position.i][move_position.j].age == CARNIVORE_MAXIMUM_AGE || entity_grid[move_position.i][move_position.j].energy == 0) { 
+            if (entity_grid[move_position.i][move_position.j].age == CARNIVORE_MAXIMUM_AGE || entity_grid[move_position.i][move_position.j].energy <= 0) { 
                 entity_grid[move_position.i][move_position.j].type = empty;
                 entity_grid[move_position.i][move_position.j].energy = 0;
                 entity_grid[move_position.i][move_position.j].age = 0;
@@ -466,7 +466,7 @@ void simul_carnivore(int i, int j) {
         entity_grid[i][j].age += 1;
     }
 
-    if (entity_grid[i][j].age == CARNIVORE_MAXIMUM_AGE || entity_grid[i][j].energy == 0) { 
+    if (entity_grid[i][j].age == CARNIVORE_MAXIMUM_AGE || entity_grid[i][j].energy <= 0) { 
         entity_grid[i][j].type = empty;
         entity_grid[i][j].energy = 0;
         entity_grid[i][j].age = 0;
