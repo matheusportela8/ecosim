@@ -25,6 +25,8 @@ const double HERBIVORE_EAT_PROBABILITY = 0.9;
 const double CARNIVORE_MOVE_PROBABILITY = 0.5;
 const double CARNIVORE_EAT_PROBABILITY = 1.0;
 
+bool threads_created = false;
+
 // Type definitions
 enum entity_type_t
 {
@@ -51,7 +53,6 @@ struct entity_t
     int32_t age;
     bool already_atualized;
 };
-std::mutex mtx;
 // Auxiliary code to convert the entity_type_t enum to a string
 NLOHMANN_JSON_SERIALIZE_ENUM(entity_type_t, {
                                                 {empty, " "},
@@ -86,7 +87,10 @@ void simul_plant(int i, int j) {
 
     std::unique_lock<std::mutex> lock(cv_mutex);
     printf("parou no wait planta\n");
-    cv.wait(lock);
+    while(!threads_created)
+    {
+        cv.wait(lock);
+    }
 
     std::vector<pos_t> growth_positions_available;
     printf("saiu no wait planta\n");
@@ -159,7 +163,10 @@ void simul_plant(int i, int j) {
 void simul_herbivore(int i, int j) {
     std::unique_lock<std::mutex> lock(cv_mutex);
     printf("parou no wait herbivoro\n");
-    cv.wait(lock);
+    while(!threads_created)
+    {
+        cv.wait(lock);
+    }
     printf("saiu no wait herbivoro\n");
     std::vector<pos_t> neighboring_empty_positions; // vetor das posicoes vazias adjacentes
     std::vector<pos_t> neighboring_plants_positions; // vetor das posicoes com planta adjacentes
@@ -318,7 +325,10 @@ void simul_herbivore(int i, int j) {
 void simul_carnivore(int i, int j) {
     std::unique_lock<std::mutex> lock(cv_mutex);
     printf("parou wait carnivoro\n");
-    cv.wait(lock);
+    while(!threads_created)
+    {
+        cv.wait(lock);
+    }
     printf("saiu do wait carnivoro\n");
 
     std::vector<pos_t> neighboring_empty_positions; // vetor das posicoes vazias adjacentes
@@ -595,7 +605,7 @@ int main()
             }
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        threads_created = true;
         int i=0;
         printf("acordou todas\n");        
         cv.notify_all();
